@@ -114,7 +114,6 @@ app.get("/status", (req, res) => {
 // 🚪 Logout route (End session)
 app.post("/logout", (req, res) => {
   const { session_id } = req.body;
-  console.log("SESSION ID", session_id)
 
   if (sessions[session_id]) {
     sessions[session_id].logout_timestamp = Math.floor(Date.now() / 1000);
