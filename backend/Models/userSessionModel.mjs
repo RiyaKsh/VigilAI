@@ -12,11 +12,11 @@ const sessionSchema = new mongoose.Schema({
     login_timestamp: Number,
     logout_timestamp: Number,
     actions: [
-        {
-            page: String,
-            timestamp: Number
-        }
-    ],
+    {
+    page: String,
+    timestamp: Number
+    }
+  ],
     trust_score: Number,
     rule_risk: Number,
     behavior_risk: Number,

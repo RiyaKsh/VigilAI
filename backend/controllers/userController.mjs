@@ -49,7 +49,20 @@ export const loginUser = async (req, res) => {
         }
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(401).json({ message: "Invalid email or password" });
+            const log = {
+            event: "login_failed",
+            timestamp: Date.now(),
+            user_id: user?._id || "unknown"
+        };
+
+        // send to threat model
+        await axios.post("http://localhost:8000/threat-detection", {
+            logs: [log]
+        });
+
+        return res.status(401).json({
+            message: "Invalid email or password"
+        });
         }
         const token = generateToken(user._id);
         const session_id = uuidv4();
@@ -58,12 +71,13 @@ export const loginUser = async (req, res) => {
             login_timestamp: Date.now(),
             actions: []
         };
+        console.log("Active Sessions:", activeSessions);
         res.status(200).json({
             _id: user._id,
             username: user.username,
             email: user.email,
             session_id: session_id,
-            token: Token
+            token: token
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -98,21 +112,112 @@ export const adminLogin = async (req, res) => {
     }
 };
 
-export const trackAction = (req, res) => {
-    const { user_id, page } = req.body;
-    const session = activeSessions[user_id];
-    if (!session) {
-        return res.status(400).json({
-            message: "No active session"
-        });
+export const trackAction = async (req, res) => {
+    try {
+
+        const { user_id, page, event } = req.body;
+        const session = activeSessions[user_id];
+
+        if (!session) {
+            return res.status(400).json({
+                message: "No active session"
+            });
+        }
+
+        // store action
+        const action = {
+            page: page,
+            event: event,
+            timestamp: Date.now()
+        };
+
+        session.actions.push(action);
+        console.log("Session actions:", session.actions);
+
+        // run live monitoring every 5 actions
+        if (session.actions.length % 5 === 0) {
+            console.log("Running ML monitoring...");
+            try {
+
+                // -------- Behavior Model Payload --------
+                const behaviorPayload = {
+                    user_id: user_id,
+                    session_id: session.session_id,
+                    login_timestamp: session.login_timestamp,
+                    logout_timestamp: Date.now(),
+                    actions: session.actions.map(a => ({
+                        page: a.page,
+                        timestamp: a.timestamp
+                    }))
+                };
+
+                // -------- Threat Model Payload --------
+                const threatLogs = session.actions.map(a => ({
+                    event: a.event,
+                    timestamp: a.timestamp,
+                    user_id: user_id
+                }));
+
+                const threatPayload = {
+                    logs: threatLogs
+                };
+
+                // call behavior model
+                console.log("Calling behavior model...");
+                const behaviorResponse = await axios.post(
+                    "http://localhost:8000/evaluate-session",
+                    behaviorPayload
+                );
+                console.log("Behavior response:", behaviorResponse.data);
+                console.log("Calling threat model...");
+                // call threat model
+                const threatResponse = await axios.post(
+                    "http://localhost:8000/evaluate-threat",
+                    threatPayload
+                );
+                console.log("Threat response:", threatResponse.data);
+
+
+                // store live risk
+                session.trust_score = behaviorResponse.data.trust_score;
+                session.behavior_risk = behaviorResponse.data.behavior_risk;
+                session.rule_risk = threatResponse.data.rule_risk;
+                session.threat_score = threatResponse.data.final_threat_score;
+                session.drift_flag = behaviorResponse.data.drift_flag;
+
+                // combine reasons
+                session.reasons = [
+                    ...(behaviorResponse.data.reasons || []),
+                    ...(threatResponse.data.reasons || [])
+                ];
+
+                // safety decision
+                session.is_safe =
+                    behaviorResponse.data.is_safe &&
+                    threatResponse.data.decision !== "BLOCK";
+
+            } catch (error) {
+        console.log("Live ML monitoring failed:", error.message);
+        if (error.response) {
+            console.log("ML response error:", error.response.data);
+        }
     }
-    session.actions.push({
-        page,
-        timestamp: Date.now()
-    });
-    res.json({
-        message: "Action recorded"
-    });
+
+        }
+        
+
+        res.json({
+            message: "Action recorded",
+            is_safe: session.is_safe ?? true
+        });
+
+    } catch (err) {
+
+        res.status(500).json({
+            error: err.message
+        });
+
+    }
 };
 
 export const logoutUser = async (req, res) => {

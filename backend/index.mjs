@@ -2,7 +2,7 @@ import express, { request } from "express";
 import router from "./Routes/userRoutes.mjs";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-
+import adminRoutes from "./Routes/adminRoutes.mjs";
 dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
@@ -15,6 +15,7 @@ app.get("/", (req, res) => {
     res.send("Hello World from Express!");
 });
 
+app.use("/api/admin", adminRoutes);
 app.use("/api/users",router);
 
 mongoose

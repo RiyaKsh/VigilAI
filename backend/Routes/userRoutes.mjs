@@ -8,4 +8,5 @@ router.post("/login", loginUser);
 router.post("/admin/login",adminLogin);
 router.post("/logout", logoutUser);
 router.post("/track-action", trackAction)
+
 export default router;
