@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 import numpy as np
+from pymongo import MongoClient
+import os
+from dotenv import load_dotenv
 
 from feature_extractor import extract_features
 from model import BehaviorModel
@@ -10,17 +13,21 @@ from risk_memory import update_risk_memory
 from adaptive_learning import update_baseline
 from threat_engine import analyze_session
 
+# ----------------------------
+# MongoDB Connection
+# ----------------------------
+load_dotenv()
+
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(MONGO_URI)
+db = client["VigilAI_DB"]
+
+user_sessions_collection = db["usersessions"]
+user_profiles_collection = db["userprofiles"]
 
 app = FastAPI()
 SAFE_THRESHOLD = 40
-
-# ----------------------------
-# Memory stores (temporary)
-# ----------------------------
-user_models = {}
-user_baselines = {}
-user_histories = {}
-
+model = BehaviorModel()
 # ----------------------------
 # Request schema
 # ----------------------------
@@ -34,6 +41,30 @@ class Session(BaseModel):
     login_timestamp: int
     logout_timestamp: int
     actions: List[Action]
+
+#checking if the user already has a baseline.
+def load_user_profile(user_id):
+    profile = user_profiles_collection.find_one({"user_id": user_id})
+    return profile
+
+#If a user does not yet have a profile, creating one.
+def create_default_user_profile(user_id):
+    profile = {
+        "user_id": user_id,
+        "baseline": {
+            "feature_history": [],
+            **create_default_baseline()
+        },
+        "risk_memory": {
+            "last_10_behavior_risks": []
+        },
+        "model_metadata": {
+            "safe_session_count": 0,
+            "last_trained_at": None
+        }
+    }
+    user_profiles_collection.insert_one(profile)
+    return profile
 
 # ----------------------------
 # Feature dict → vector
@@ -55,7 +86,6 @@ def feature_dict_to_vector(features):
 # ----------------------------
 def create_default_baseline():
     return {
-        "feature_history": [],
         "avg_login_hour": 21,
         "std_login_hour": 1,
         "avg_actions_per_minute": 3,
@@ -64,7 +94,6 @@ def create_default_baseline():
         "std_session_duration": 50,
         "avg_unique_pages": 4
     }
-
 # ----------------------------
 # API endpoint
 # ----------------------------
@@ -77,18 +106,12 @@ def evaluate_session(session: Session):
     # Load or create model
     # ----------------------------
 
-    if user_id not in user_models:
-        model = BehaviorModel()
-        user_models[user_id] = model
-        user_baselines[user_id] = create_default_baseline()
-        user_histories[user_id] = {
-            "last_10_behavior_risks": []
-        }
-
-    model = user_models[user_id]
-    baseline = user_baselines[user_id]
-    history = user_histories[user_id]
-
+    profile = load_user_profile(user_id)
+    if profile is None:
+        profile = create_default_user_profile(user_id)
+    baseline = profile.get("baseline", create_default_baseline())
+    history = profile.get("risk_memory", {"last_10_behavior_risks": []})
+    
     # ----------------------------
     # Feature extraction
     # ----------------------------
@@ -107,9 +130,15 @@ def evaluate_session(session: Session):
     # ----------------------------
     # Risk memory
     # ----------------------------
-
     memory_result = update_risk_memory(history, behavior_risk)
-    history["last_10_behavior_risks"] = memory_result["last_10_behavior_risks"]
+    user_profiles_collection.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "risk_memory.last_10_behavior_risks": memory_result["last_10_behavior_risks"]
+            }
+        }
+    )
     drift_flag = memory_result["drift_flag"]
     if drift_flag:
         behavior_risk = min(behavior_risk + 10, 100)
@@ -117,13 +146,40 @@ def evaluate_session(session: Session):
     # ----------------------------
     # Adaptive learning
     # ----------------------------
-
-    if behavior_risk < SAFE_THRESHOLD and not drift_flag:
-        baseline = update_baseline(baseline, feature_vector)
-        user_baselines[user_id] = baseline
-
+    # determine safety
     is_safe = behavior_risk < SAFE_THRESHOLD
 
+    # increment safe session counter
+    if is_safe:
+        profile["model_metadata"]["safe_session_count"] += 1
+
+    # update baseline only for safe sessions without drift
+    if behavior_risk < SAFE_THRESHOLD and not drift_flag:
+        baseline = update_baseline(baseline, feature_vector)
+        user_profiles_collection.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "baseline": baseline,
+                    "model_metadata.safe_session_count": profile["model_metadata"]["safe_session_count"]
+                }
+            }
+        )
+    else:
+        # still update the safe_session_count if session was safe
+        user_profiles_collection.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "model_metadata.safe_session_count": profile["model_metadata"]["safe_session_count"]
+                }
+            }
+        )
+
+    safe_count = profile["model_metadata"]["safe_session_count"]
+
+    if safe_count >= 5 and profile["model_metadata"]["last_trained_at"] is None:
+        print("Training model for user:", user_id)
     return {
         "trust_score": trust_score,
         "rule_risk": rule_risk,
@@ -132,7 +188,6 @@ def evaluate_session(session: Session):
         "is_safe": is_safe,
         "reasons": reasons
     }
-
 # Define input structure
 class LogItem(BaseModel):
     event: str
