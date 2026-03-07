@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Navbar from "./Navbar";
 import {
   PieChart,
@@ -11,25 +11,93 @@ import {
   Tooltip
 } from "recharts";
 
-const data = [
-  { name: "Mon", score: 82 },
-  { name: "Tue", score: 85 },
-  { name: "Wed", score: 83 },
-  { name: "Thu", score: 87 },
-  { name: "Fri", score: 84 },
-  { name: "Sat", score: 86 },
-  { name: "Sun", score: 88 }
-];
-
-const riskData = [
-  { name: "Low", value: 80 },
-  { name: "Medium", value: 15 },
-  { name: "High", value: 5 }
-];
-
 const COLORS = ["#10b981", "#f59e0b", "#ef4444"];
 
 function AdminDashboard() {
+
+  const [users, setUsers] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+
+  const [riskData, setRiskData] = useState([]);
+  const [trendData, setTrendData] = useState([]);
+
+  const [stats, setStats] = useState({
+    activeUsers: 0,
+    suspiciousSessions: 0,
+    highRiskUsers: 0,
+    alerts: 0
+  });
+
+  const fetchUsers = async () => {
+    try {
+
+      const res = await fetch("http://localhost:5000/api/admin/users-risk");
+      const data = await res.json();
+
+      setUsers(data);
+
+      // compute stats
+      const highRisk = data.filter(u => u.risk_level === "HIGH").length;
+      const mediumRisk = data.filter(u => u.risk_level === "MEDIUM").length;
+      const lowRisk = data.filter(u => u.risk_level === "LOW").length;
+
+      setStats(prev => ({
+        ...prev,
+        activeUsers: data.length,
+        highRiskUsers: highRisk,
+        suspiciousSessions: mediumRisk
+      }));
+
+      setRiskData([
+        { name: "Low", value: lowRisk },
+        { name: "Medium", value: mediumRisk },
+        { name: "High", value: highRisk }
+      ]);
+
+      // simple trend from trust scores
+      const trend = data.slice(0, 7).map((u, i) => ({
+        name: `User ${i + 1}`,
+        score: u.trust_score
+      }));
+
+      setTrendData(trend);
+
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  const fetchAlerts = async () => {
+    try {
+
+      const res = await fetch("http://localhost:5000/api/admin/alerts");
+      const data = await res.json();
+
+      setAlerts(data.alerts || []);
+
+      setStats(prev => ({
+        ...prev,
+        alerts: data.total_alerts || 0
+      }));
+
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  useEffect(() => {
+
+    fetchUsers();
+    fetchAlerts();
+
+    const interval = setInterval(() => {
+      fetchUsers();
+      fetchAlerts();
+    }, 5000);
+
+    return () => clearInterval(interval);
+
+  }, []);
 
   return (
     <div className="dashboard">
@@ -43,22 +111,22 @@ function AdminDashboard() {
       <div className="cards">
 
         <div className="card">
-          <h2>2,847</h2>
+          <h2>{stats.activeUsers}</h2>
           <p>Active Users</p>
         </div>
 
         <div className="card">
-          <h2>23</h2>
+          <h2>{stats.suspiciousSessions}</h2>
           <p>Suspicious Sessions</p>
         </div>
 
         <div className="card">
-          <h2>5</h2>
+          <h2>{stats.highRiskUsers}</h2>
           <p>High Risk Users</p>
         </div>
 
         <div className="card">
-          <h2>142</h2>
+          <h2>{stats.alerts}</h2>
           <p>Alerts Detected</p>
         </div>
 
@@ -76,6 +144,7 @@ function AdminDashboard() {
           <h2>User Risk Overview</h2>
 
           <table>
+
             <thead>
               <tr>
                 <th>User</th>
@@ -86,26 +155,20 @@ function AdminDashboard() {
             </thead>
 
             <tbody>
-              <tr>
-                <td>Alice Johnson</td>
-                <td>92</td>
-                <td>8</td>
-                <td className="low">Low</td>
-              </tr>
 
-              <tr>
-                <td>Bob Smith</td>
-                <td>45</td>
-                <td>55</td>
-                <td className="high">High</td>
-              </tr>
+              {users.map((user, index) => (
 
-              <tr>
-                <td>Carol Williams</td>
-                <td>78</td>
-                <td>22</td>
-                <td className="low">Low</td>
-              </tr>
+                <tr key={index}>
+                  <td>{user.user_id}</td>
+                  <td>{user.trust_score}</td>
+                  <td>{user.threat_score}</td>
+
+                  <td className={user.risk_level.toLowerCase()}>
+                    {user.risk_level}
+                  </td>
+                </tr>
+
+              ))}
 
             </tbody>
 
@@ -121,6 +184,7 @@ function AdminDashboard() {
           <h2>Risk Distribution</h2>
 
           <PieChart width={300} height={300}>
+
             <Pie
               data={riskData}
               cx="50%"
@@ -129,10 +193,13 @@ function AdminDashboard() {
               outerRadius={100}
               dataKey="value"
             >
+
               {riskData.map((entry, index) => (
-                <Cell key={index} fill={COLORS[index]} />
+                <Cell key={index} fill={COLORS[index % COLORS.length]} />
               ))}
+
             </Pie>
+
           </PieChart>
 
         </div>
@@ -150,17 +217,16 @@ function AdminDashboard() {
 
           <h2>Live Alerts</h2>
 
-          <div className="alert red">
-            Unusual login pattern detected - Bob Smith
-          </div>
+          {alerts.map((alert, index) => (
 
-          <div className="alert yellow">
-            Multiple failed login attempts
-          </div>
+            <div
+              key={index}
+              className={`alert ${alert.risk_level === "HIGH" ? "red" : "yellow"}`}
+            >
+              User {alert.user_id} — {alert.reasons?.[0]}
+            </div>
 
-          <div className="alert red">
-            File access anomaly - Frank Miller
-          </div>
+          ))}
 
         </div>
 
@@ -171,11 +237,18 @@ function AdminDashboard() {
 
           <h2>Trust Score Trend</h2>
 
-          <LineChart width={400} height={250} data={data}>
+          <LineChart width={400} height={250} data={trendData}>
+
             <XAxis dataKey="name" />
             <YAxis />
             <Tooltip />
-            <Line type="monotone" dataKey="score" stroke="#10b981" />
+
+            <Line
+              type="monotone"
+              dataKey="score"
+              stroke="#10b981"
+            />
+
           </LineChart>
 
         </div>
