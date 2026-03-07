@@ -50,7 +50,7 @@ function Dashboard() {
         .then((data) => setStatus(data));
 
       // Fetch session data
-      fetch("http://localhost:5000/sessions")
+      fetch("http://localhost:3000/api/admin/sessions")
         .then((res) => res.json())
         .then((data) => setSessions(data));
     };

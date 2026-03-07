@@ -13,7 +13,7 @@ function Files() {
       const sessionId = localStorage.getItem("session_id");
       const username = localStorage.getItem("username");
 
-      const response = await fetch("http://localhost:5000/log", {
+      const response = await fetch("http://localhost:3000/api/user/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
