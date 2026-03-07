@@ -5,6 +5,9 @@ import numpy as np
 from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
+import joblib
+from pathlib import Path
+from datetime import datetime, timezone
 
 from feature_extractor import extract_features
 from model import BehaviorModel
@@ -25,9 +28,13 @@ db = client["VigilAI_DB"]
 user_sessions_collection = db["usersessions"]
 user_profiles_collection = db["userprofiles"]
 
+MODEL_DIR = Path("models")
+MODEL_DIR.mkdir(exist_ok=True)
+model_cache = {}
+
 app = FastAPI()
 SAFE_THRESHOLD = 40
-model = BehaviorModel()
+fallback_model = BehaviorModel()
 # ----------------------------
 # Request schema
 # ----------------------------
@@ -41,6 +48,35 @@ class Session(BaseModel):
     login_timestamp: int
     logout_timestamp: int
     actions: List[Action]
+
+#Getting the model path for individual user
+def get_model_path(user_id):
+    return MODEL_DIR / f"user_{user_id}.pkl"
+
+#Load User Model Function
+def load_user_model(user_id):
+    if user_id in model_cache:
+        return model_cache[user_id]
+    model_path = get_model_path(user_id)
+    if model_path.exists():
+        model = joblib.load(model_path)
+        model_cache[user_id] = model
+        return model
+    return None
+
+#Save Model Function
+def save_user_model(user_id, model):
+    model_path = get_model_path(user_id)
+    joblib.dump(model, model_path)
+
+#Training Function for individual users
+def train_user_model(user_id, feature_history):
+    if len(feature_history) < 5:
+        return None
+    model = BehaviorModel()
+    model.train(feature_history)
+    save_user_model(user_id, model)
+    return model
 
 #checking if the user already has a baseline.
 def load_user_profile(user_id):
@@ -86,14 +122,32 @@ def feature_dict_to_vector(features):
 # ----------------------------
 def create_default_baseline():
     return {
-        "avg_login_hour": 21,
-        "std_login_hour": 1,
-        "avg_actions_per_minute": 3,
-        "std_actions_per_minute": 0.5,
-        "avg_session_duration": 600,
-        "std_session_duration": 50,
-        "avg_unique_pages": 4
+        "feature_history": [],
+        "avg_login_hour": None,
+        "std_login_hour": None,
+        "avg_actions_per_minute": None,
+        "std_actions_per_minute": None,
+        "avg_session_duration": None,
+        "std_session_duration": None,
+        "avg_unique_pages": None
     }
+
+#bootstrap function for default baselines
+def bootstrap_baseline_from_session(features, feature_vector):
+    return {
+        "feature_history": [feature_vector],
+
+        "avg_login_hour": float(features["login_hour"]),
+        "std_login_hour": 0.0,
+
+        "avg_session_duration": float(features["session_duration"]),
+        "std_session_duration": 0.0,
+
+        "avg_actions_per_minute": float(features["actions_per_minute"]),
+        "std_actions_per_minute": 0.0,
+
+        "avg_unique_pages": float(features["unique_pages_visited"])
+    }   
 # ----------------------------
 # API endpoint
 # ----------------------------
@@ -111,13 +165,38 @@ def evaluate_session(session: Session):
         profile = create_default_user_profile(user_id)
     baseline = profile.get("baseline", create_default_baseline())
     history = profile.get("risk_memory", {"last_10_behavior_risks": []})
-    
     # ----------------------------
     # Feature extraction
     # ----------------------------
+
     features = extract_features(session_data)
     feature_vector = feature_dict_to_vector(features)
-    trust_score = model.predict(feature_vector)
+    # Feature extraction
+    feature_history = baseline.get("feature_history", [])
+    if len(feature_history) < 3:
+        rule_risk = 0
+        reasons = []
+    else:
+        rule_risk, reasons = evaluate_behavior_rules(features, baseline)
+
+    if len(feature_history) == 0:
+        baseline = bootstrap_baseline_from_session(features, feature_vector)
+
+        user_profiles_collection.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "baseline": baseline
+                }
+            }
+        )
+        # Load user model if exists
+    user_model = load_user_model(user_id)
+    if user_model:
+        trust_score = user_model.predict(feature_vector)
+    else:
+        trust_score = fallback_model.predict(feature_vector)
+
     trust_risk = 100 - trust_score
 
     # ----------------------------
@@ -176,10 +255,38 @@ def evaluate_session(session: Session):
             }
         )
 
+    feature_history = baseline.get("feature_history", [])
     safe_count = profile["model_metadata"]["safe_session_count"]
 
+    # train first model
     if safe_count >= 5 and profile["model_metadata"]["last_trained_at"] is None:
-        print("Training model for user:", user_id)
+
+        trained_model = train_user_model(user_id, feature_history)
+        if trained_model:
+            model_cache[user_id] = trained_model
+        if trained_model:
+            user_profiles_collection.update_one(
+                {"user_id": user_id},
+                {
+                    "$set": {
+                        "model_metadata.last_trained_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+    elif safe_count % 5 == 0 and safe_count >= 10 and is_safe:
+
+        trained_model = train_user_model(user_id, feature_history)
+        if trained_model:
+            model_cache[user_id] = trained_model
+        if trained_model:
+            user_profiles_collection.update_one(
+                {"user_id": user_id},
+                {
+                    "$set": {
+                        "model_metadata.last_trained_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
     return {
         "trust_score": trust_score,
         "rule_risk": rule_risk,

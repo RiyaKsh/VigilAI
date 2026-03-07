@@ -11,7 +11,7 @@ class BehaviorModel:
             random_state=42
         )
 
-        # baseline "normal user behavior"
+        # fallback baseline (used before user-specific training)
         baseline_data = np.array([
             [21, 600, 5, 3.0, 10, 1, 4],
             [20, 650, 6, 3.1, 11, 1, 5],
@@ -20,8 +20,19 @@ class BehaviorModel:
             [20, 590, 6, 3.0, 12, 1, 5]
         ])
 
-        # train model immediately
         self.model.fit(baseline_data)
+
+    def train(self, feature_history):
+
+        X = np.array(feature_history)
+
+        self.model = IsolationForest(
+            n_estimators=100,
+            contamination=0.1,
+            random_state=42
+        )
+
+        self.model.fit(X)
 
     def predict(self, feature_vector):
 

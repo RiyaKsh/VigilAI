@@ -2,7 +2,7 @@ import numpy as np
 
 def update_baseline(baseline, new_feature_vector, window_size=20):
 
-    history = baseline.get("feature_history", [])
+    history = baseline.setdefault("feature_history", [])
 
     history.append(new_feature_vector)
 
