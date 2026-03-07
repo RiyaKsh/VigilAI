@@ -1,0 +1,130 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: sans-serif;
+}
+
+.login-container {
+    display: flex;
+    height: 100vh;
+}
+
+.login-left {
+    width: 50%;
+    background: #f4f4f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-left img {
+    width: 35%;
+    max-width: 450px;
+}
+
+.login-right {
+    width: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-box {
+    width: 350px;
+    text-align: center;
+}
+
+.login-box h2 {
+    font-size: 28px;
+    margin-bottom: 5px;
+}
+
+.login-box p {
+    margin-bottom: 50px;
+    color: #777;
+}
+
+.login-box button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    background: black;
+    color: white;
+    border-radius: 25px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.login-box button:hover {
+    opacity: 0.9;
+}
+
+.error {
+    color: red;
+    margin-bottom: 10px;
+}
+
+.login-box .group {
+    position: relative;
+    margin-bottom: 45px;
+}
+
+.login-box input {
+    font-size: 18px;
+    padding: 10px 10px 10px 5px;
+    display: block;
+    width: 100%;
+    border: none!important;
+    border-bottom: 1px solid #757575!important;
+    background: unset!important;
+    color: white!important;
+    border-radius: 0px!important;
+}
+
+.login-box input:focus {
+    outline: none;
+}
+
+/* LABEL ======================================= */
+.login-box label {
+    color: #999;
+    font-size: 18px;
+    font-weight: normal;
+    position: absolute;
+    pointer-events: none;
+    left: 5px;
+    top: 10px;
+    transition: 0.2s ease all;
+    -moz-transition: 0.2s ease all;
+    -webkit-transition: 0.2s ease all;
+}
+
+/* active state */
+.login-box input:focus~label,
+.login-box input:valid~label,
+.login-box input:not(:placeholder-shown)~label {
+    top: -20px;
+    font-size: 14px;
+    /* color: #5264AE; */
+}
+
+.login-box button {
+    margin: unset !important;
+    width: 100% !important;
+    background: #fff;
+    color: #000;
+}
+
+.login-box button:hover {
+    background: #fff;
+    box-shadow: 10px;
+}
+
+.signup-link{
+    margin-top: 20px;
+}
+.signup-text{
+    color:rgb(62, 62, 201);
+    cursor: pointer;
+}
