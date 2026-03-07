@@ -77,12 +77,19 @@ const Login = () => {
             {error && <p className="error">{error}</p>}
             <button type="submit">Log In</button>
           </form>
-          <p className="signup-link">
-            Don't have an account?{" "}
-            <span onClick={() => navigate("/signup")} className="signup-text">
-              Sign Up
-            </span>
-          </p>
+         <p className="signup-link">
+  Don't have an account?{" "}
+  <span onClick={() => navigate("/signup")} className="signup-text">
+    Sign Up
+  </span>
+</p>
+<div className="divider"></div>
+<p 
+  className="admin-access"
+  onClick={() => navigate("/admin")}
+>
+  Admin Access →
+</p>      
         </div>
       </div>
     </div>

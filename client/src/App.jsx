@@ -1,23 +1,25 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import Login from "./components/Login";
-import Activity from "./components/Activity";
 import Dashboard from "./components/Dashboard";
-import Signup from "./components/signup";
+import Activity from "./components/activity";
+import AdminDashboard from "./components/AdminDashboard";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/activity" element={<Activity />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+
+        {/* USER PAGES */}
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/actions" element={<Activity />} />
+
+        {/* ADMIN PAGE */}
+        <Route path="/admin" element={<AdminDashboard />} />
+
       </Routes>
     </BrowserRouter>
   );
 }
 
 export default App;
-
