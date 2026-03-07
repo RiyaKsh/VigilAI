@@ -1,12 +1,12 @@
 import express, { request } from "express";
 import cors from "cors";
-import router from "./Routes/userRoutes.mjs";
+import userRoutes from "./Routes/authRoutes.mjs";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import adminRoutes from "./Routes/adminRoutes.mjs";
-
+import sessionRoutes from "./Routes/sessionRoutes.js";
 dotenv.config();
-const app = express();
+const app = express()
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
@@ -25,7 +25,9 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/admin", adminRoutes);
-app.use("/api/users",router);
+app.use("/api/users",userRoutes);
+app.use("/api/session", sessionRoutes);
+
 
 mongoose
     .connect(process.env.MONGO_URI)

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { registerUser, loginUser, adminLogin, logoutUser, trackAction } from "../controllers/userController.mjs";
+import { registerUser, loginUser, adminLogin, logoutUser, trackAction } from "../controllers/authController.mjs";
 
 const router = Router();
 

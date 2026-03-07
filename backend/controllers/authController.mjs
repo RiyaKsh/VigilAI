@@ -4,8 +4,8 @@ import generateToken from "../utils/generateToken.js";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
 import UserSession from "../Models/userSessionModel.mjs";
-
-const activeSessions = {};
+import { calculateRisk } from "../services/adaptiveRiskEngine.js";
+import { activeSessions } from "../services/sessionService.js";
 
 export const registerUser = async (req, res) => {
     try {
@@ -67,10 +67,22 @@ export const loginUser = async (req, res) => {
         const token = generateToken(user._id);
         const session_id = uuidv4();
         activeSessions[user._id] = {
-            session_id: session_id,
-            login_timestamp: Date.now(),
-            actions: []
-        };
+        user_id: user._id,
+        session_id: session_id,
+        login_timestamp: Date.now(),
+
+        actions: [],
+
+        trust_score: 100,
+        behavior_risk: 0,
+        threat_score: 0,
+
+        risk_score: 0,
+        risk_level: "LOW",
+
+        drift_flag: false,
+        reasons: []
+    };
         console.log("Active Sessions:", activeSessions);
         res.status(200).json({
             _id: user._id,
@@ -185,6 +197,17 @@ export const trackAction = async (req, res) => {
                 session.threat_score = threatResponse.data.final_threat_score;
                 session.drift_flag = behaviorResponse.data.drift_flag;
 
+                //calculate risk
+                const riskResult = calculateRisk(
+                session.trust_score,
+                session.behavior_risk,
+                session.threat_score,
+                session.drift_flag
+                );
+
+                session.risk_score = riskResult.risk_score;
+                session.risk_level = riskResult.risk_level;
+                session.action = riskResult.action;
                 // combine reasons
                 session.reasons = [
                     ...(behaviorResponse.data.reasons || []),
@@ -192,9 +215,7 @@ export const trackAction = async (req, res) => {
                 ];
 
                 // safety decision
-                session.is_safe =
-                    behaviorResponse.data.is_safe &&
-                    threatResponse.data.decision !== "BLOCK";
+                session.is_safe = session.risk_level !== "CRITICAL";
 
             } catch (error) {
         console.log("Live ML monitoring failed:", error.message);
@@ -207,9 +228,19 @@ export const trackAction = async (req, res) => {
         
 
         res.json({
-            message: "Action recorded",
-            is_safe: session.is_safe ?? true
-        });
+        message: "Action recorded",
+
+        is_safe: session.is_safe ?? true,
+
+        trust_score: session.trust_score,
+        threat_score: session.threat_score,
+        risk_score: session.risk_score,
+        risk_level: session.risk_level,
+        action: session.action,
+
+        drift_flag: session.drift_flag,
+        reasons: session.reasons
+    });
 
     } catch (err) {
 
@@ -249,7 +280,18 @@ export const logoutUser = async (req, res) => {
         }
         await UserSession.create({
             ...sessionData,
-            ...mlResult
+            ...mlResult,
+
+            trust_score: session.trust_score,
+            behavior_risk: session.behavior_risk,
+            threat_score: session.threat_score,
+
+            risk_score: session.risk_score,
+            risk_level: session.risk_level,
+            action: session.action,
+
+            drift_flag: session.drift_flag,
+            reasons: session.reasons
         });
         delete activeSessions[user_id];
         res.json({
