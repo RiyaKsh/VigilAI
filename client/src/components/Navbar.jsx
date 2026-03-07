@@ -11,7 +11,7 @@ function Navbar() {
       </div>
 
       <div className="nav-links">
-        <Link to="/">Dashboard</Link>
+        <Link to="/dashboard">Dashboard</Link>
         <Link to="/actions">Actions</Link>
         <button className="logout">Logout</button>
       </div>

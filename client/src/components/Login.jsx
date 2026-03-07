@@ -21,8 +21,10 @@ const Login = () => {
         "http://127.0.0.1:3000/api/users/login",
         credentials
       );
+      console.log("Login response:", res.data);
       // Save session data
       localStorage.setItem("token", res.data.token);
+
       localStorage.setItem("session_id", res.data.session_id);
       localStorage.setItem("user_id", res.data._id);
       localStorage.setItem("username", res.data.username);
