@@ -102,7 +102,7 @@ function AdminDashboard() {
   return (
     <div className="dashboard">
 
-      <Navbar />
+      {/* <Navbar /> */}
 
       <h1>TrustLayer Admin</h1>
 
