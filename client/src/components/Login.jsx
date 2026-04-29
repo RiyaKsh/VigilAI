@@ -3,6 +3,14 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import "../statics/login.css";
 import logo from "../statics/Gemini_Generated_Image_v39d9wv39d9wv39d.png";
+import { useEffect } from "react";
+
+// useEffect(() => {
+//   const token = localStorage.getItem("token");
+//   if (token) {
+//     navigate("/activity"); // or dashboard
+//   }
+// }, []);
 
 const Login = () => {
 

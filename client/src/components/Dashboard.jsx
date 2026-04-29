@@ -6,18 +6,18 @@ import "react-circular-progressbar/dist/styles.css";
 function Dashboard() {
 
   const [session, setSession] = useState(null);
+  const [localActions, setLocalActions] = useState([]);
 
   const user_id = localStorage.getItem("user_id");
 
+  // ✅ FETCH BACKEND SESSION
   const fetchSession = async () => {
     try {
-
       const res = await fetch(
         `http://localhost:3000/api/session/status/${user_id}`
       );
 
       const data = await res.json();
-
       setSession(data);
 
     } catch (error) {
@@ -25,15 +25,34 @@ function Dashboard() {
     }
   };
 
-  useEffect(() => {
+  // ✅ LOAD LOCALSTORAGE DATA
+  const loadLocalActions = () => {
+    const key = `activity_${user_id}`;
+    const data = JSON.parse(localStorage.getItem(key)) || [];
+    setLocalActions(data);
+  };
 
+  useEffect(() => {
     fetchSession();
+    loadLocalActions();
 
     const interval = setInterval(fetchSession, 5000);
 
-    return () => clearInterval(interval);
+    // ✅ Listen for updates
+    window.addEventListener("activityUpdated", loadLocalActions);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("activityUpdated", loadLocalActions);
+    };
 
   }, []);
+
+  // ✅ MERGE BACKEND + LOCAL DATA
+  const mergedActions = [
+    ...(session?.actions || []),
+    ...localActions
+  ];
 
   const score = session?.trust_score || 0;
   const risk = session?.risk_level || "LOW";
@@ -78,7 +97,7 @@ function Dashboard() {
             </div>
 
             <div>
-              <h3>{session?.actions?.length || 0}</h3>
+              <h3>{mergedActions.length}</h3>
               <p>Actions</p>
             </div>
 
@@ -92,7 +111,7 @@ function Dashboard() {
           <h3>Recent Activity</h3>
 
           <ul>
-            {session?.actions?.slice(-4).map((action, i) => (
+            {mergedActions.slice(-4).map((action, i) => (
               <li key={i}>
                 {action.event}
               </li>
@@ -112,12 +131,10 @@ function Dashboard() {
 
         <h2>Security Timeline</h2>
 
-        {session?.actions?.slice(-5).map((action, i) => (
-
+        {mergedActions.slice(-5).map((action, i) => (
           <div className="timeline-item" key={i}>
             {action.event}
           </div>
-
         ))}
 
       </div>

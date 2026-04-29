@@ -6,18 +6,44 @@ import Activity from "./components/activity";
 import AdminDashboard from "./components/AdminDashboard";
 import Login from "./components/Login";
 import Signup from "./components/Signup";
+import ProtectedRoute from "./components/ProtectedRoute";
 function App() {
   return (
     <BrowserRouter>
       <Routes>
 
-        {/* USER PAGES */}
+        {/* PUBLIC ROUTES */}
         <Route path="/" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/activity" element={<Activity />} />
         <Route path="/signup" element={<Signup />} />
-        {/* ADMIN PAGE */}
-        <Route path="/admin" element={<AdminDashboard />} />
+
+        {/* PROTECTED USER ROUTES */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/activity"
+          element={
+            <ProtectedRoute>
+              <Activity />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ADMIN ROUTE (optional protection) */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
 
       </Routes>
     </BrowserRouter>
