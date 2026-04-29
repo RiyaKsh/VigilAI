@@ -1,2 +1,5 @@
 __pycache__/
 requirments.txt
+myvenv
+venv
+.env
